@@ -7,7 +7,7 @@
 
 	"background":
 	{
-		"scripts": ["OpenPGP.js","main.js"]
+		"scripts": ["OpenPGP.js","main.js", "contextMenus.js"]
 	},
 
 	"permissions": [
@@ -18,7 +18,9 @@
 	[
 		{
 			"matches": ["<all_urls>"],
-			"js": ["content.js"]
+			"js": ["content.js"],
+			"css": ["content.css"],
+			"run_at": "document_end"
 		}
 	],
 
@@ -28,6 +30,11 @@
 		"128": "icon128.png",
 		"450": "icon.png"
 	},
+
+	"web_accessible_resources": [
+		"icon32.png",
+		"cross.png"
+	],
 
 	"options_page": "options.html"
 }
