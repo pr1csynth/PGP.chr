@@ -28,3 +28,5 @@ function tick () {
 
 	
 }
+
+tick();
