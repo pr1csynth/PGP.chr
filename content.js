@@ -1,4 +1,5 @@
 var passRequests = [];
+var lastRightClickedElement = document.documentElement;
 
 chrome.runtime.onMessage.addListener(
 	function(request, sender, sendResponse) {
@@ -62,6 +63,12 @@ cross.addEventListener("click", function (e) {
 	passInput.value = "";
 });
 
+window.addEventListener('mousedown', function(e){
+	if(e.button == 2){
+		lastRightClickedElement = e.target;
+		console.log([lastRightClickedElement]);
+	}
+});
 
 function showPassBox(callback) {
 	if(passRequests.length == 0){

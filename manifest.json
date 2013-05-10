@@ -21,6 +21,11 @@
 			"js": ["content.js"],
 			"css": ["content.css"],
 			"run_at": "document_end"
+		},
+		{
+			"matches": ["<all_urls>"],
+			"css": ["content.css"],
+			"run_at": "document_start"
 		}
 	],
 
@@ -28,7 +33,7 @@
 		"16": "icon16.png",
 		"48": "icon32.png",
 		"128": "icon128.png",
-		"450": "icon.png"
+		"256": "icon.png"
 	},
 
 	"web_accessible_resources": [
