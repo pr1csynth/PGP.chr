@@ -79,33 +79,68 @@ function showPassBox(callback) {
 	console.log(passRequests);
 }
 
-function findPGPBlocks(elem) {
-	elem.normalize();
+function findPGPBlocks(el) {
+	el.normalize();
 
-	var potentialMessage = new Array();
-	var potentialPublic = new Array();
-	for(var i = 0, len = elem.childNodes.length; i < len; i++) {
-		if(elem.childNodes[i].nodeType == 3){
-			if(elem.childNodes[i].textContent.trim() != ""){
-
-				if(elem.childNodes[i].textContent.indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") != -1){
-					potentialPublic.push(elem.childNodes[i]);
-				}else if(elem.childNodes[i].textContent.indexOf("-----BEGIN PGP MESSAGE-----") != -1){
-					potentialMessage.push(elem.childNodes[i]);
+	function findInTextNodes(elem) {
+		for(var i = 0, len = elem.childNodes.length; i < len; i++) {
+			if(elem.childNodes[i].nodeType == 3){
+				if(elem.childNodes[i].textContent.trim() != ""){
+					if(elem.childNodes[i].textContent.indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") != -1){
+						requestPublicKeyAdd(elem.childNodes[i].textContent);
+					}else if(elem.childNodes[i].textContent.indexOf("-----BEGIN PGP MESSAGE-----") != -1){
+						decryptElement(elem.childNodes[i]);
+					}
 				}
+			}else {
+				nodes = findInTextNodes(elem.childNodes[i])
 			}
-		}else {
-			nodes = findPGPBlocks(elem.childNodes[i])
-			potentialMessage = potentialMessage.concat(nodes.potentialMessage);
-			potentialPublic = potentialPublic.concat(nodes.potentialPublic);
 		}
 	}
-	return {potentialMessage:potentialMessage,potentialPublic:potentialPublic};
+
+	findInTextNodes(el);
+
+	var inputs = el.getElementsByTagName('input');
+	inputs.concat(el.getElementsByTagName('textarea'));
+
+	for(var i = 0, len = inputs.length; i < len; i++) {
+		if(inputs[i].value.trim() != ""){
+			if(inputs[i].value.indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") != -1){
+				requestPublicKeyAdd(inputs[i].value);
+			}else if(inputs[i].value.indexOf("-----BEGIN PGP MESSAGE-----") != -1){
+				decryptElement(input[i]);
+			}	
+		}
+	}
+}
+
+function decryptElement(el){
+	if(el.tagName == "INPUT"){
+		chrome.runtime.sendMessage({object: "decryptMessage", message: filter(el.value, "message")}, function(response) {
+			console.log(response);
+		});
+	}else{
+		chrome.runtime.sendMessage({object: "decryptMessage", message: filter(el.textContent, "message")}, function(response) {
+			console.log(response);
+		});
+	}
+}
+
+function filter(string, type) {
+	if(type == "message"){
+		start = "-----BEGIN PGP MESSAGE-----";
+		end = "-----END PGP MESSAGE-----";
+	}else if(type == "key"){
+		start = "-----BEGIN PGP PUBLIC KEY BLOCK-----";
+		end = "-----END PGP PUBLIC KEY BLOCK-----";		
+	}
+	return start + string.split(start)[1].split(end)[0] + end;
 }
 
 
 function tick () {
-	var blocks = findPGPBlocks(document.documentElement);
+	findPGPBlocks(document.documentElement);
+
 }
 
 tick();

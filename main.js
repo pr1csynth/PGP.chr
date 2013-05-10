@@ -1,13 +1,4 @@
 openpgp.init();
-var ready = false;
-
-if(!localStorage.getItem("publicKeys")){
-	localStorage.setItem("publicKeys",JSON.stringify({}));
-}
-
-if(localStorage.getItem("privateKey")){
-	ready = true;
-}
 
 chrome.runtime.onMessage.addListener(
 	function(request, sender, sendResponse) {
@@ -52,22 +43,8 @@ function addPrivateKey (request, sendResponse) {
 		sendResponse({success:false});
 	}else{
 		sendResponse({success:true});
-		var name ="";
-		var first = true;
-		var contacts = [];			
-		for(user in result[0].userIds){	
-			contact = readContact(result[0].userIds[user].text)		
-			contacts.unshift(contact);
-			if(first){
-				name = contact.name;
-				first = false;
-			}else{
-				name = contact.name + ", " + name;
-			}
-		}
-
-		var privateKey = {key:request.privateKey, contacts:contacts};
-		localStorage.setItem("privateKey", JSON.stringify(privateKey));
+		openpgp.keyring.importPrivateKey(request.privateKey);
+		openpgp.keyring.store();
 	}
 }
 
@@ -82,40 +59,25 @@ function addPublicKey (request, sendResponse) {
 		sendResponse({success:false});
 	}else{
 		sendResponse({success:true});
-		var publicKeys = JSON.parse(localStorage.getItem("publicKeys"));
-		var name ="";
-		var first = true;
-		var contacts = [];
-		for(key in result){
-				
-			for(user in result[key].userIds){	
-				contact = readContact(result[key].userIds[user].text)		
-				contacts.unshift(contact);
-				if(first){
-					name = contact.name;
-					first = false;
-				}else{
-					name = contact.name + ", " + name;
-				}
-			}
-		}
-		publicKeys[name] = {key:request.publicKey, contacts:contacts};
-		localStorage.setItem("publicKeys", JSON.stringify(publicKeys));
+		openpgp.keyring.importPublicKey(request.publicKey);
+		openpgp.keyring.store();
 	}
 }
 
 function getPublicKeys(sendResponse){
-	var publicKeys = JSON.parse(localStorage.getItem("publicKeys"));
-	sendResponse({publicKeys:publicKeys});
+	sendResponse({publicKeys:openpgp.keyring.publicKeys});
 }
 
 function encryptMessage (request, sendResponse) {
-	var publicKeys = JSON.parse(localStorage.getItem("publicKeys"));
-	var publicKey = openpgp.read_publicKey(publicKeys[request.publicKey].key)[0];
 
-	var text = openpgp.write_encrypted_message([publicKey], request.message);
+	publicKeys = openpgp.keyring.getPublicKeysForKeyId(request.publicKey);
 
-	sendResponse({success:true, message:text});
+	if(publicKeys.length == 0){
+		var text = openpgp.write_encrypted_message(publicKeys, request.message);
+		sendResponse({success:true, message:text});
+	}else{
+		sendResponse({success:false, err:"No public key with this id."});
+	}
 }
 
 function decryptMessage (request, sender, sendResponse) {
@@ -128,10 +90,9 @@ function decryptMessage (request, sender, sendResponse) {
 	if(result == null){
 		sendResponse({success:false, err:"Invalid message."});
 	}else{
-		if(ready){
+		if(openpgp.keyring.hasPrivateKey()){
 			var message = result[0];
-			var privateKey = openpgp.read_privateKey(JSON.parse(localStorage.getItem('privateKey')).key)[0];
-			var publicKeys = openpgp.read_publicKey(privateKey.extractPublicKey());
+			var privateKey = openpgp.keyring.privateKeys[0];
 
 			if(!privateKey.hasUnencryptedSecretKeyData){
 				chrome.tabs.sendMessage(sender.tab.id, {object: "privateKeyPass"}, function(response) {
@@ -139,7 +100,7 @@ function decryptMessage (request, sender, sendResponse) {
 						if(privateKey.decryptSecretMPIs(response.pass)){
 				
 							var material = {key: privateKey , keymaterial: privateKey.privateKeyPacket};
-							decrypt(response.pass,material, message, publicKeys, function (data) {
+							decrypt(response.pass,material, message, function (data) {
 								if(data){
 									sendResponse({success:true, message: data});	
 								}else{
@@ -155,7 +116,7 @@ function decryptMessage (request, sender, sendResponse) {
 				});
 			}else{
 				var material = {key: privateKey , keymaterial: privateKey.privateKeyPacket};
-				decrypt("",material, message, publicKeys, function (data) {
+				decrypt("",material, message, function (data) {
 					if(data){
 						sendResponse({success:true, message: data});	
 					}else{
@@ -170,7 +131,7 @@ function decryptMessage (request, sender, sendResponse) {
 	}
 }
 
-function decrypt(password, material, message, publicKeys, callback) {
+function decrypt(password, material, message, callback) {
 
 	decryptHelper = function (msg, mat, session, publics, cb) {
 		try{
@@ -188,12 +149,12 @@ function decrypt(password, material, message, publicKeys, callback) {
 
 	for(var sessionKeyIterator in message.sessionKeys){
 		var sessionKey = message.sessionKeys[sessionKeyIterator];
-		if(!decryptHelper(message, material, sessionKey, publicKeys, callback)){
+		if(!decryptHelper(message, material, sessionKey, callback)){
 			for (sub in material.key.subKeys) {
 				var keymat = { key: material.key, keymaterial: material.key.subKeys[sub]};
 				if(!keymat.keymaterial.hasUnencryptedSecretKeyData)
 					keymat.keymaterial.decryptSecretMPIs(password);
-				if(!decryptHelper(message, keymat, sessionKey, publicKeys, callback)){
+				if(!decryptHelper(message, keymat, sessionKey, callback)){
 					callback(false);
 				}
 			}
