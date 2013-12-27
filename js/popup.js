@@ -17,10 +17,21 @@ function setupPopup(items){
 		aside.textContent = items[i].badge;
 		aside.style.backgroundColor = items[i].color;
 
+		if(items[i].color.length == 7 && items[i].color.indexOf('#') != -1){
+			if((
+				parseInt(items[i].color.substr(1,2), 16)*0.96 +
+				parseInt(items[i].color.substr(3,2), 16)*1.42 +
+				parseInt(items[i].color.substr(5,2), 16)*0.96 
+				)/3 > 190)
+			{
+				aside.style.color = "black";
+			}
+		}
+
 		comm.textContent = items[i].text;
 		comm.classList.add('comm');
 
-		note.textContent = "test";
+		note.textContent = items[i].note;
 		note.classList.add('note');
 
 
@@ -32,13 +43,26 @@ function setupPopup(items){
 			article.appendChild(h2);
 		}
 		article.appendChild(comm);
-		article.appendChild(note);
 
+		for(a in items[i].actions){
+			var link = document.createElement('a');
+			link.textContent = items[i].actions[a];
+			link.dataset.action = a;
+			link.id = i;
+			link.addEventListener('click', onAction);
+			note.appendChild(link);
+		}
+
+		article.appendChild(note);
 		popup.insertBefore(article, footer);
 
 		if(items[i].type == "notification"){
 			article.classList.add('notif');
-			aside.style.height = (article.offsetHeight + 2) + "px";
+			aside.style.height = (article.offsetHeight + 5) + "px";
 		}
 	}
+}
+
+function onAction(){
+	console.log(this.dataset);
 }
