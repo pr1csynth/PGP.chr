@@ -61,9 +61,9 @@ function scanArmoredPGPBlocks(el){
 					}
 
 					if(t == "message"){
-						var uuid = UUID();
-						encryptedNodes[uuid] = node;
-						block.nodeId = uuid;	
+						var id = genBlockId(block);
+						encryptedNodes[id] = node;
+						block.id = id;	
 					}
 
 
@@ -85,3 +85,14 @@ console.log(scan);
 chrome.runtime.sendMessage({"object":"blockScanResult", payload:scan}, function (response) {
 	console.log(response);
 });
+
+function genBlockId (block) {
+	var sample = block.armor.substr(block.end - block.begin, 8);
+	console.log(sample);
+	var id ="";
+	for (var i = sample.length - 1; i >= 0; i--) {
+		id += sample.charCodeAt(i).toString(16);
+	};
+
+	return id;
+}
