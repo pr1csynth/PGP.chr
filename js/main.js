@@ -24,7 +24,8 @@ chrome.runtime.onMessage.addListener(
 
 		switch(request.object){
 			case "blockScanResult":
-			storeValidBlocks(request.payload, sender.tab.id);
+			storeValidBlocks(request.payload, sendResponse);
+			updatePopupBadge();
 			break;
 			case "setupPopup":
 			sendResponse(setupPopup());
@@ -35,7 +36,7 @@ chrome.runtime.onMessage.addListener(
 	}
 );
 
-function storeValidBlocks(blocks, tabId) {
+function storeValidBlocks(blocks, sendResponse) {
 
 	for(i in blocks.public){
 		var result = openpgp.read_publicKey(blocks.public[i].armor);
@@ -120,10 +121,10 @@ function storeValidBlocks(blocks, tabId) {
 				}
 				
 				blocks.message[i].ids = ids;
-				blocks.message[i].tabId = tabId;
+				blocks.message[i].sendResponse = sendResponse;
 
 				if(!storage.pending.message.hasOwnProperty(blocks.message[i].nodeId)){
-					storage.pending.message[blocks.message[i].nodeId] = blocks.message[i];
+					storage.pending.message[blocks.message[i].id] = blocks.message[i];
 				}
 			}
 		}else{
@@ -133,13 +134,21 @@ function storeValidBlocks(blocks, tabId) {
 
 }
 
+function updatePopupBadge(){
+	var text = (Object.keys(storage.pending.public).length +
+				Object.keys(storage.pending.message).length + (Object.keys(storage.pending.private).length != 0 ? 1 : 0)) + "";
+
+	chrome.browserAction.setBadgeText({text:text});
+}
+
 function setupPopup () {
 	var items = {}
 
 	for(i in storage.pending.message){
 		items[i] = {
 			type : "block",
-			badge : "msg"
+			badge : "msg",
+			note : ""
 		};
 
 
@@ -152,11 +161,12 @@ function setupPopup () {
 		}else{
 			items[i].title = "Inconnu";
 			items[i].text = "Destinataire inconnu";
-			items[i].color = "#203";
+			items[i].color = "#333";
 		}
 
 		items[i].actions = {
-			"decryptMessage": "déchiffrer"
+			"decryptMessage": "déchiffrer",
+			"ignoreMessage" : "ignorer"
 		}
 
 
@@ -165,29 +175,38 @@ function setupPopup () {
 	for(i in storage.pending.public){
 		items[i] = {
 			type : "block",
-			badge : "pub"
+			badge : "pub",
+			note : ""
 		}
 
 		identity = identitySplitter(storage.pending.public[i].identity);
 		items[i].title = identity.name;
 		items[i].text = identity.comment + ", " + identity.mail;
-		items[i].color = "#" + storage.pending.public[i].id.substr(0,6);
+		items[i].color = "#" + storage.pending.public[i].id.substr(1,6);
 		
 		items[i].actions = {
-			"importPublicKey": "importer"
+			"importPublicKey" : "importer",
+			"writeMessageWith" : "chiffrer un message",
+			"ignorePublicKey" : "ignorer"
 		}
 
 	}
 
-	if(storage.pending.private.length != 0){
-		items[UUID()] = {
-			"type" : "notification",
-			"badge" : "priv",
-			"text" : "PGP.chr a trouvé des clefs privées.",
-			"actions" : {
-				"importPendingPrivateKeys" : "tout importer"
-			},
-			"color":"#203"
+	for(i in storage.pending.private){
+		items["priv_" + i] = {
+			type : "block",
+			badge : "priv",
+			note : ""
+		}
+
+		identity = identitySplitter(storage.pending.private[i].identity);
+		items["priv_" + i].title = identity.name + " ― clef privée";
+		items["priv_" + i].text = identity.comment + ", " + identity.mail;
+		items["priv_" + i].color = "#" + storage.pending.private[i].id.substr(1,6);
+		
+		items["priv_" + i].actions = {
+			"ignorePrivateKey" : "ignorer",
+			"importPrivateKey" : "importer la clef privée"
 		}
 	}
 
@@ -197,9 +216,23 @@ function setupPopup () {
 
 function identitySplitter(identity){
 	var result = {};
-	result.name = identity.split('(')[0].slice(0,-1);
-	result.comment = identity.split('(')[1].split(')')[0];
-	result.mail = identity.split('<')[1].split('>')[0];
+	if(identity.indexOf('(') != -1){
+		result.name = identity.split('(')[0].slice(0,-1);
+		result.comment = identity.split('(')[1].split(')')[0];
+	}else{
+		if(identity.indexOf('<') != -1){
+			result.name = identity.split('<')[0].slice(0,-1);
+		}else{
+			result.name = identity;
+		}
+		result.comment = '―';
+	}
+
+	if(identity.indexOf('<') != -1){
+		result.mail = identity.split('<')[1].split('>')[0];
+	}else{
+		result.mail = '―';
+	}
 	return result;
 }
 
