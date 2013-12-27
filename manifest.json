@@ -7,7 +7,7 @@
 
 	"background":
 	{
-		"scripts": ["OpenPGP.js","main.js", "contextMenus.js"]
+		"scripts": ["js/uuid-v4.js", "js/openpgp.js", "js/main.js"]
 	},
 
 	"permissions": [
@@ -18,28 +18,27 @@
 	[
 		{
 			"matches": ["<all_urls>"],
-			"js": ["content.js"],
-			"css": ["content.css"],
+			"js": ["js/uuid-v4.js", "js/content.js"],
 			"run_at": "document_end"
-		},
-		{
-			"matches": ["<all_urls>"],
-			"css": ["content.css"],
-			"run_at": "document_start"
 		}
 	],
 
+	"browser_action": {
+		"default_icon": "images/icon128.png",
+		"default_title": "PGP.chr",
+		"default_popup": "html/popup.html"
+	},
+
 	"icons": {
-		"16": "icon16.png",
-		"48": "icon32.png",
-		"128": "icon128.png",
-		"256": "icon.png"
+		"16": "images/icon16.png",
+		"32": "images/icon32.png",
+		"128": "images/icon128.png",
+		"256": "images/icon.png"
 	},
 
 	"web_accessible_resources": [
-		"icon32.png",
-		"cross.png"
+		"images/icon32.png"
 	],
 
-	"options_page": "options.html"
+	"options_page": "html/options.html"
 }
