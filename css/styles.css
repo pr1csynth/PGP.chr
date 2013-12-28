@@ -54,6 +54,13 @@ a:hover{
 	min-height: 10px;
 }
 
+#popup article.closed{
+	height: 0px;
+	min-height: 0px;
+	margin-bottom: 0px;
+	transition: margin 0.05s, height 0.2s 0.05s;
+}
+
 #popup article aside{
 	background-color: #777;
 	float: left;

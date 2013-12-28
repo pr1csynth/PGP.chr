@@ -22,14 +22,29 @@ var storage = {
 chrome.runtime.onMessage.addListener(
 	function(request, sender, sendResponse) {
 
+		console.log(request);
+
 		switch(request.object){
 			case "blockScanResult":
-			storeValidBlocks(request.payload, sendResponse);
-			updatePopupBadge();
+				storeValidBlocks(request.payload, sendResponse);
+				updatePopupBadge();
 			break;
 			case "setupPopup":
-			sendResponse(setupPopup());
+				sendResponse(setupPopup());
+			break;
+			case "ignoreMessage":
+			case "ignorePublicKey":
+			case "ignorePrivateKey":
+				sendResponse({object:"closeItem", payload:request.payload});
+				var type = request.object.split('ignore')[1].replace('Key', '').toLowerCase();
+				if(storage.pending[type].hasOwnProperty(request.payload)){
+					delete storage.pending[type][request.payload];
+				}
+				updatePopupBadge();
+			break;
 			default:
+				sendResponse(request);
+			break;
 		}
 
 		return true;
@@ -136,9 +151,13 @@ function storeValidBlocks(blocks, sendResponse) {
 
 function updatePopupBadge(){
 	var text = (Object.keys(storage.pending.public).length +
-				Object.keys(storage.pending.message).length + (Object.keys(storage.pending.private).length != 0 ? 1 : 0)) + "";
+				Object.keys(storage.pending.message).length + (Object.keys(storage.pending.private).length != 0 ? 1 : 0));
 
-	chrome.browserAction.setBadgeText({text:text});
+	if(text > 0){
+		chrome.browserAction.setBadgeText({text:text+""});
+	}else{
+		chrome.browserAction.setBadgeText({text:""});
+	}
 }
 
 function setupPopup () {

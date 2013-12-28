@@ -4,6 +4,19 @@ chrome.runtime.sendMessage({"object":"setupPopup"}, function (response) {
 
 var popup = document.getElementById('popup');
 var footer = document.getElementById('footer');
+var popupItems = {};
+
+
+function onMessage(request){
+	switch(request.object){
+		case "closeItem":
+			removeItem(request.payload);
+		break;
+		default:
+			console.log(request);
+		break;
+	}
+}
 
 function setupPopup(items){
 	for(i in items){
@@ -48,12 +61,14 @@ function setupPopup(items){
 			var link = document.createElement('a');
 			link.textContent = items[i].actions[a];
 			link.dataset.action = a;
-			link.id = i;
+			link.dataset.id = i;
 			link.addEventListener('click', onAction);
 			note.appendChild(link);
 		}
 
 		article.appendChild(note);
+		article.id = i;
+		popupItems[i] = article;
 		popup.insertBefore(article, footer);
 
 		if(items[i].type == "notification"){
@@ -64,5 +79,12 @@ function setupPopup(items){
 }
 
 function onAction(){
-	console.log(this.dataset);
+	chrome.runtime.sendMessage({object:this.dataset.action, payload:this.dataset.id}, onMessage);
+}
+
+
+function removeItem(id){
+	if(popupItems.hasOwnProperty(id)){
+		popupItems[id].classList.add('closed');
+	}
 }
