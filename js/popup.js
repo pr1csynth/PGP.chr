@@ -71,9 +71,9 @@ function setupPopup(items){
 		popupItems[i] = article;
 		popup.insertBefore(article, footer);
 
-		if(items[i].type == "notification"){
-			article.classList.add('notif');
-			aside.style.height = (article.offsetHeight + 5) + "px";
+		if(items[i].type == "mini"){
+			article.classList.add('mini');
+			aside.style.height = article.style.height = (article.offsetHeight + 5) + "px";
 		}
 	}
 }

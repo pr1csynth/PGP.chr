@@ -4,18 +4,20 @@ var debug_lastreadmessage = null;
 var debug_lastreadpublickey = null;
 var debug_lastreadprivatekey = null;
 
+var colorShift = 9;
+
 var storage = {
 	"pending":{
-		"message" : {},
+		"private" : {},
 		"public" : {},
-		"private" : {}
+		"message" : {}
 	},
 	"locked":{
 		"private" : {}
 	},
 	"ready":{
-		"public" : {},
-		"private" : {}
+		"private" : {},
+		"public" : {}
 	}
 }
 
@@ -39,6 +41,27 @@ chrome.runtime.onMessage.addListener(
 				var type = request.object.split('ignore')[1].replace('Key', '').toLowerCase();
 				if(storage.pending[type].hasOwnProperty(request.payload)){
 					delete storage.pending[type][request.payload];
+				}
+				updatePopupBadge();
+			break;
+			case "importPublicKey":
+				var pub = true;
+			case "importPrivateKey":
+				sendResponse({object:"closeItem", payload:request.payload});
+
+				if(request.payload.indexOf('_') != -1){
+					request.payload = request.payload.split('_')[1];
+				}
+
+				if(storage.pending[pub ? "public" : "private"].hasOwnProperty(request.payload)){
+					if(pub){
+						for(i in storage.pending.public[request.payload].subKeyIds)
+							storage.ready.public[storage.pending.public[request.payload].subKeyIds[i]] = storage.pending.public[request.payload];
+					}else{
+						for(i in storage.pending.private[request.payload].subKeyIds)
+							storage.locked.private[storage.pending.private[request.payload].subKeyIds[i]] = storage.pending.private[request.payload];
+					}
+					delete storage.pending[pub ? "public" : "private"][request.payload];
 				}
 				updatePopupBadge();
 			break;
@@ -151,7 +174,9 @@ function storeValidBlocks(blocks, sendResponse) {
 
 function updatePopupBadge(){
 	var text = (Object.keys(storage.pending.public).length +
-				Object.keys(storage.pending.message).length + (Object.keys(storage.pending.private).length != 0 ? 1 : 0));
+				Object.keys(storage.pending.message).length +
+				Object.keys(storage.pending.private).length
+				);
 
 	if(text > 0){
 		chrome.browserAction.setBadgeText({text:text+""});
@@ -163,32 +188,22 @@ function updatePopupBadge(){
 function setupPopup () {
 	var items = {}
 
-	for(i in storage.pending.message){
-		items[i] = {
+	for(i in storage.pending.private){
+		items["priv_" + i] = {
 			type : "block",
-			badge : "msg",
+			badge : "priv",
 			note : ""
-		};
-
-
-		var privateKey = findPrivateKeyForMessage(storage.pending.message[i]);
-		if(privateKey){
-			identity = identitySplitter(privateKey.identity);
-			items[i].title = identity.name;
-			items[i].text = identity.comment + ", " + identity.mail;
-			items[i].color = "#" + privatekey.id.substr(0,6);
-		}else{
-			items[i].title = "Inconnu";
-			items[i].text = "Destinataire inconnu";
-			items[i].color = "#333";
 		}
 
-		items[i].actions = {
-			"decryptMessage": "déchiffrer",
-			"ignoreMessage" : "ignorer"
+		identity = identitySplitter(storage.pending.private[i].identity);
+		items["priv_" + i].title = identity.name + " ― clef privée";
+		items["priv_" + i].text = identity.comment + ", " + identity.mail;
+		items["priv_" + i].color = "#" + storage.pending.private[i].id.substr(colorShift,6);
+		
+		items["priv_" + i].actions = {
+			"ignorePrivateKey" : "ignorer",
+			"importPrivateKey" : "importer la clef privée"
 		}
-
-
 	}
 
 	for(i in storage.pending.public){
@@ -201,31 +216,39 @@ function setupPopup () {
 		identity = identitySplitter(storage.pending.public[i].identity);
 		items[i].title = identity.name;
 		items[i].text = identity.comment + ", " + identity.mail;
-		items[i].color = "#" + storage.pending.public[i].id.substr(1,6);
+		items[i].color = "#" + storage.pending.public[i].id.substr(colorShift,6);
 		
 		items[i].actions = {
 			"importPublicKey" : "importer",
 			"writeMessageWith" : "chiffrer un message",
 			"ignorePublicKey" : "ignorer"
 		}
-
 	}
 
-	for(i in storage.pending.private){
-		items["priv_" + i] = {
-			type : "block",
-			badge : "priv",
+	for(i in storage.pending.message){
+		items[i] = {
+			badge : "msg",
 			note : ""
+		};
+
+
+		var privateKey = findPrivateKeyForMessage(storage.pending.message[i]);
+		if(privateKey){
+			identity = identitySplitter(privateKey.identity);
+			items[i].type = "block";
+			items[i].title = identity.name;
+			items[i].text = identity.comment + ", " + identity.mail;
+			items[i].color = "#" + privateKey.id.substr(colorShift,6);
+		}else{
+			items[i].type = "mini";
+			items[i].title = "Inconnu";
+			items[i].text = "Destinataire inconnu";
+			items[i].color = "#CCC";
 		}
 
-		identity = identitySplitter(storage.pending.private[i].identity);
-		items["priv_" + i].title = identity.name + " ― clef privée";
-		items["priv_" + i].text = identity.comment + ", " + identity.mail;
-		items["priv_" + i].color = "#" + storage.pending.private[i].id.substr(1,6);
-		
-		items["priv_" + i].actions = {
-			"ignorePrivateKey" : "ignorer",
-			"importPrivateKey" : "importer la clef privée"
+		items[i].actions = {
+			"decryptMessage": "déchiffrer",
+			"ignoreMessage" : "ignorer"
 		}
 	}
 
@@ -265,19 +288,15 @@ function asciiToHex(string){
 function findPrivateKeyForMessage(message){
 	for(j in storage.ready.private){
 		for(k in message.ids){
-			for(s in storage.ready.private[k].subKeyIds){
-				if(s == k){
-					return storage.ready.private[k];
-				}
+			if(j == message.ids[k]){
+				return storage.ready.private[j];
 			}
 		}
 	}
 	for(j in storage.locked.private){
 		for(k in message.ids){
-			for(s in storage.locked.private[k].subKeyIds){
-				if(s == k){
-					return storage.locked.private[k];
-				}
+			if(j == message.ids[k]){
+				return storage.locked.private[j];
 			}
 		}
 	}
