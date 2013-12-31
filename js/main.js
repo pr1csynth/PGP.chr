@@ -47,23 +47,40 @@ chrome.runtime.onMessage.addListener(
 			case "importPublicKey":
 				var pub = true;
 			case "importPrivateKey":
-				sendResponse({object:"closeItem", payload:request.payload});
-
-				if(request.payload.indexOf('_') != -1){
-					request.payload = request.payload.split('_')[1];
+	
+				if(pub){
+					id = request.payload;
+				}else{
+					id = request.payload.split('_')[1];
 				}
 
-				if(storage.pending[pub ? "public" : "private"].hasOwnProperty(request.payload)){
+				if(storage.pending[pub ? "public" : "private"].hasOwnProperty(id)){
 					if(pub){
-						for(i in storage.pending.public[request.payload].subKeyIds)
-							storage.ready.public[storage.pending.public[request.payload].subKeyIds[i]] = storage.pending.public[request.payload];
+						for(i in storage.pending.public[id].subKeyIds)
+							storage.ready.public[storage.pending.public[id].subKeyIds[i]] = storage.pending.public[id];
 					}else{
-						for(i in storage.pending.private[request.payload].subKeyIds)
-							storage.locked.private[storage.pending.private[request.payload].subKeyIds[i]] = storage.pending.private[request.payload];
+						storage.locked.private[id] = storage.pending.private[id];
 					}
-					delete storage.pending[pub ? "public" : "private"][request.payload];
+					delete storage.pending[pub ? "public" : "private"][id];
 				}
+
 				updatePopupBadge();
+
+				if(pub){
+					sendResponse({object:"closeItem", payload:request.payload});
+				}else{
+					var newRequest = [
+						{object:"closeItem", payload:request.payload},
+						{object:"addItems"}
+					];
+
+					newRequest[1].payload = {};
+					newRequest[1].payload['unlock_' + id] = genPopupItemAskForUnlock(id);
+					newRequest[1].payload['unlock_' + id].before = request.payload;
+
+					sendResponse(newRequest);
+				}
+
 			break;
 			default:
 				sendResponse(request);
@@ -107,7 +124,7 @@ function storeValidBlocks(blocks, sendResponse) {
 
 			}
 		}else{
-			console.log("error while decoding publickey");
+			console.log("error while decoding public key");
 		}
 	}
 
@@ -138,7 +155,7 @@ function storeValidBlocks(blocks, sendResponse) {
 				}
 			}
 		}else{
-			console.log("error while decoding privatekey");
+			console.log("error while decoding private key");
 		}
 	}
 
@@ -189,71 +206,109 @@ function setupPopup () {
 	var items = {}
 
 	for(i in storage.pending.private){
-		items["priv_" + i] = {
-			type : "block",
-			badge : "priv",
-			note : ""
-		}
-
-		identity = identitySplitter(storage.pending.private[i].identity);
-		items["priv_" + i].title = identity.name + " ― clef privée";
-		items["priv_" + i].text = identity.comment + ", " + identity.mail;
-		items["priv_" + i].color = "#" + storage.pending.private[i].id.substr(colorShift,6);
-		
-		items["priv_" + i].actions = {
-			"ignorePrivateKey" : "ignorer",
-			"importPrivateKey" : "importer la clef privée"
-		}
+		items["priv_" + i] = genPopupItemPrivateKey(i);
 	}
 
 	for(i in storage.pending.public){
-		items[i] = {
-			type : "block",
-			badge : "pub",
-			note : ""
-		}
-
-		identity = identitySplitter(storage.pending.public[i].identity);
-		items[i].title = identity.name;
-		items[i].text = identity.comment + ", " + identity.mail;
-		items[i].color = "#" + storage.pending.public[i].id.substr(colorShift,6);
-		
-		items[i].actions = {
-			"importPublicKey" : "importer",
-			"writeMessageWith" : "chiffrer un message",
-			"ignorePublicKey" : "ignorer"
-		}
+		items[i] = genPopupItemPublicKey(i);
 	}
 
 	for(i in storage.pending.message){
-		items[i] = {
-			badge : "msg",
-			note : ""
-		};
-
-
-		var privateKey = findPrivateKeyForMessage(storage.pending.message[i]);
-		if(privateKey){
-			identity = identitySplitter(privateKey.identity);
-			items[i].type = "block";
-			items[i].title = identity.name;
-			items[i].text = identity.comment + ", " + identity.mail;
-			items[i].color = "#" + privateKey.id.substr(colorShift,6);
-		}else{
-			items[i].type = "mini";
-			items[i].title = "Inconnu";
-			items[i].text = "Destinataire inconnu";
-			items[i].color = "#CCC";
-		}
-
-		items[i].actions = {
-			"decryptMessage": "déchiffrer",
-			"ignoreMessage" : "ignorer"
-		}
+		items[i] = genPopupItemMessage(i);
 	}
 
 	return items;
 
+}
+
+function genPopupItemPrivateKey (privateKeyId) {
+	var item = {
+		type : "block",
+		badge : "priv",
+		note : ""
+	}
+
+	identity = identitySplitter(storage.pending.private[privateKeyId].identity);
+	item.title = identity.name + " ― clef privée";
+	item.text = identity.comment + ", " + identity.mail;
+	item.color = "#" + storage.pending.private[privateKeyId].id.substr(colorShift,6);
+	
+	item.actions = {
+		"ignorePrivateKey" : "ignorer",
+		"importPrivateKey" : "importer la clef privée"
+	}
+
+	return item;
+}
+
+function genPopupItemPublicKey (publicKeyId) {
+	var item = {
+		type : "block",
+		badge : "pub",
+		note : ""
+	}
+
+	identity = identitySplitter(storage.pending.public[publicKeyId].identity);
+	item.title = identity.name;
+	item.text = identity.comment + ", " + identity.mail;
+	item.color = "#" + storage.pending.public[publicKeyId].id.substr(colorShift,6);
+
+	item.actions = {
+		"importPublicKey" : "importer",
+		"writeMessageWith" : "chiffrer un message",
+		"ignorePublicKey" : "ignorer"
+	}
+
+	return item;
+}
+
+function genPopupItemMessage (messageId) {
+	var item = {
+		badge : "msg",
+		note : ""
+	};
+
+
+	var privateKey = findPrivateKeyForMessage(storage.pending.message[messageId]);
+	if(privateKey){
+		identity = identitySplitter(privateKey.identity);
+		item.type = "block";
+		item.title = identity.name;
+		item.text = identity.comment + ", " + identity.mail;
+		item.color = "#" + privateKey.id.substr(colorShift,6);
+	}else{
+		item.type = "mini";
+		item.title = "Inconnu";
+		item.text = "Destinataire inconnu";
+		item.color = "#CCC";
+	}
+
+	item.actions = {
+		"decryptMessage": "déchiffrer",
+		"ignoreMessage" : "ignorer"
+	}
+
+	return item;
+}
+
+function genPopupItemAskForUnlock(privateKeyId){
+	var item = {
+		type : "block",
+		badge : "priv",
+		note : "",
+		passfield : true,
+		colored: true
+	}
+
+	identity = identitySplitter(storage.locked.private[privateKeyId].identity);
+	item.title = identity.name + " ― dévérouiller";
+	item.text = identity.comment + ", " + identity.mail;
+	item.color = "#" + storage.locked.private[privateKeyId].id.substr(colorShift,6);
+	
+	item.actions = {
+		"unlockPrivateKey" : "unlock",
+	}
+	return item;
 }
 
 function identitySplitter(identity){

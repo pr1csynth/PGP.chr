@@ -125,7 +125,7 @@ a:hover{
 }
 
 #popup article input{
-	padding: 2px;
+	padding-left: 2px;
 	height: 20px;
 	display: inline-block;
 	margin-top: -3px;
@@ -140,6 +140,13 @@ a:hover{
 	height: 20px;
 	display: inline-block;
 	position: relative;
+	cursor: pointer;
 }
 
+#popup article button:hover{
+	opacity: 0.9;
+}
 
+#popup article button:active{
+	opacity: 1;
+}
